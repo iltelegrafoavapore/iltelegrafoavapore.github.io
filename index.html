@@ -2,179 +2,24 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Partite di oggi</title>
 <style>
-*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#111;color:#eee}
-header{padding:18px 22px;background:#1b1b1b;position:sticky;top:0;z-index:10;border-bottom:1px solid #333}
-h1{margin:0 0 6px;font-size:24px}.sub{color:#aaa;font-size:14px}
-main{max-width:1100px;margin:0 auto;padding:20px}
-.match{background:#1b1b1b;border:1px solid #333;border-radius:10px;margin:0 0 14px;overflow:hidden}
-.info{padding:14px 16px}.league{color:#aaa;font-size:12px;margin-bottom:5px}
-.teams{font-size:18px;font-weight:bold}.time{float:right;color:#bbb;font-weight:normal}
-.links{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:#151515;border-top:1px solid #2b2b2b}
-a,.server{display:inline-block;padding:8px 12px;border-radius:6px;background:#303030;color:#fff;text-decoration:none}
-a:hover,.server:hover{background:#444}.empty{padding:30px;text-align:center;color:#aaa}
-#playerView{display:none;position:fixed;inset:0;background:#000;z-index:20}
-#playerFrame{width:100%;height:100%;border:0}
-#back{position:fixed;z-index:30;top:12px;left:12px;padding:8px 12px;background:rgba(0,0,0,.75);color:#fff;border:1px solid #555;border-radius:6px;cursor:pointer}
+*{box-sizing:border-box}html,body{margin:0;background:#111;color:#eee;font-family:Arial,sans-serif}header{padding:12px;border-bottom:1px solid #333}h1{margin:0 0 6px;font-size:28px}#info{color:#aaa;font-size:16px}#status{padding:30px 12px;color:#aaa}#matches{max-width:1325px;margin:24px auto;padding:0 12px}.match{background:#181818;border:1px solid #333;border-radius:12px;margin-bottom:16px;overflow:hidden}.match-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #333}.league{color:#aaa;font-size:15px;margin-bottom:5px}.teams{font-size:23px;font-weight:bold}.time{font-size:24px;color:#bbb;white-space:nowrap;margin-left:20px}.servers{display:flex;flex-wrap:wrap;gap:7px;padding:14px 20px;background:#141414}.server-group{display:flex;align-items:center;gap:6px;margin-right:8px}.label{color:#bbb;font-size:16px}.server-btn{border:0;border-radius:6px;background:#303030;color:#fff;padding:10px 14px;font-size:16px;cursor:pointer}.server-btn:hover{background:#444}.empty{color:#888;padding:20px}@media(max-width:600px){.match-head{padding:13px}.teams{font-size:18px}.time{font-size:19px}.servers{padding:12px}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Partite di oggi</h1>
-  <div class="sub" id="status">Caricamento...</div>
-</header>
-<main id="list"></main>
-
-<div id="playerView">
-  <button id="back">← Elenco</button>
-  <iframe id="playerFrame" allow="autoplay; fullscreen" allowfullscreen></iframe>
-</div>
-
+<header><h1>Partite di oggi</h1><div id="info">Caricamento...</div></header>
+<div id="status">Caricamento partite...</div><div id="matches"></div>
 <script>
-const JSON_URL = "https://v2-gvtsch.pages.dev/sch.json";
-
-function todayItaly(){
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone:"Europe/Rome", year:"numeric", month:"2-digit", day:"2-digit"
-  }).formatToParts(now);
-  const o = Object.fromEntries(parts.map(x=>[x.type,x.value]));
-  return `${o.year}-${o.month}-${o.day}`;
-}
-
-function envivoFromUrl(url){
-  try {
-    const u = new URL(url);
-    return u.searchParams.get("envivo");
-  } catch { return null; }
-}
-
-function openPlayer(server, envivo){
-  // Il player Cartelive usa tre server: /player/1/, /player/2/, /player/3/.
-  location.hash = `player/${server}/${envivo}`;
-  showPlayer(server, envivo);
-}
-
-function showPlayer(server, envivo){
-  document.getElementById("playerFrame").src =
-    `https://cartelive.club/player/${server}/${encodeURIComponent(envivo)}`;
-  document.getElementById("playerView").style.display = "block";
-}
-
-function closePlayer(){
-  document.getElementById("playerFrame").src = "about:blank";
-  document.getElementById("playerView").style.display = "none";
-  history.replaceState(null,"",location.pathname+location.search);
-}
-
-document.getElementById("back").onclick = closePlayer;
-
-async function load(){
-  const list = document.getElementById("list");
-  const today = todayItaly();
-
-  try{
-    const r = await fetch(JSON_URL, {cache:"no-store"});
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
-
-    const matches = data
-      .filter(m => m.match_date === today)
-      .map(m => ({
-        ...m,
-        envivoServers: (m.servers || [])
-          .map(s => ({...s, envivo: envivoFromUrl(s.url)}))
-          .filter(s => s.envivo !== null)
-      }))
-      .filter(m => m.envivoServers.length > 0)
-      .sort((a,b) => (a.match_time || a.kickoff_time || "").localeCompare(b.match_time || b.kickoff_time || ""));
-
-    document.getElementById("status").textContent =
-      `${today} · ${matches.length} partite con stream envivo`;
-
-    if(!matches.length){
-      list.innerHTML = '<div class="empty">Nessuna partita con envivo disponibile oggi.</div>';
-      return;
-    }
-
-    for(const m of matches){
-      const card = document.createElement("section");
-      card.className = "match";
-
-      const info = document.createElement("div");
-      info.className = "info";
-
-      const league = document.createElement("div");
-      league.className = "league";
-      league.textContent = m.league || m.sport || "";
-
-      const teams = document.createElement("div");
-      teams.className = "teams";
-      teams.innerHTML =
-        `${escapeHtml(m.team1?.name || "?")} - ${escapeHtml(m.team2?.name || "?")}` +
-        `<span class="time">${escapeHtml(m.match_time || m.kickoff_time || "")}</span>`;
-
-      info.append(league, teams);
-
-      const links = document.createElement("div");
-      links.className = "links";
-
-      // Ogni voce del JSON identifica la lingua/canale.
-      // Per ciascuna voce offriamo S1/S2/S3, perché il JSON non contiene
-      // una mappatura lingua -> numero server Cartelive.
-      m.envivoServers.forEach(s => {
-        const group = document.createElement("span");
-        group.style.display = "inline-flex";
-        group.style.gap = "4px";
-        group.style.alignItems = "center";
-
-        const label = document.createElement("span");
-        label.textContent = s.label || "SERVER";
-        label.style.padding = "8px 4px";
-        label.style.color = "#bbb";
-
-        group.appendChild(label);
-
-        [1,2,3].forEach(server => {
-          const a = document.createElement("a");
-          a.href = `#player/${server}/${s.envivo}`;
-          a.textContent = `S${server}`;
-          a.title = `${s.label || "Server"} · S${server} · envivo ${s.envivo}`;
-          a.onclick = e => {
-            e.preventDefault();
-            openPlayer(server, s.envivo);
-          };
-          group.appendChild(a);
-        });
-
-        links.appendChild(group);
-      });
-
-      card.append(info, links);
-      list.appendChild(card);
-    }
-  }catch(e){
-    document.getElementById("status").textContent = "Errore nel caricamento";
-    list.innerHTML =
-      `<div class="empty">Impossibile leggere sch.json.<br>${escapeHtml(e.message)}</div>`;
-  }
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g,c=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  }[c]));
-}
-
-function restoreHash(){
-  const m = location.hash.match(/^#player\/([123])\/([^/]+)$/);
-  if(m) showPlayer(m[1],m[2]);
-}
-
-load();
-restoreHash();
+const JSON_URL="https://v2-gvtsch.pages.dev/sch.json";
+function todayItaly(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Rome",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
+function getParam(url,name){try{return new URL(url).searchParams.get(name)}catch(e){return null}}
+function serverInfo(server,index){const url=server.url||"";const envivo=getParam(url,"envivo");if(envivo)return{type:"envivo",player:"https://cartelive.club/player/"+(index+1)+"/"+envivo};return{type:"other",player:url}}
+function createButton(server,index){const info=serverInfo(server,index);const btn=document.createElement("button");btn.className="server-btn";btn.textContent=info.type==="envivo"?"S"+(index+1):(server.label||("S"+(index+1)));btn.onclick=()=>window.location.href=info.player;return btn}
+function renderMatches(data){const today=todayItaly();const matches=data.filter(m=>{const date=m.match_date||m.kickoff_date;return date===today&&Array.isArray(m.servers)&&m.servers.length>0});matches.sort((a,b)=>{const ta=(a.match_time||a.kickoff_time||"99:99").replace(":","");const tb=(b.match_time||b.kickoff_time||"99:99").replace(":","");return Number(ta)-Number(tb)});document.getElementById("info").textContent=today+" · "+matches.length+" partite con stream";document.getElementById("status").style.display="none";const container=document.getElementById("matches");container.innerHTML="";if(!matches.length){container.innerHTML='<div class="empty">Nessuna partita con stream disponibile oggi.</div>';return}for(const match of matches){const card=document.createElement("div");card.className="match";const head=document.createElement("div");head.className="match-head";const left=document.createElement("div");const league=document.createElement("div");league.className="league";league.textContent=match.league||match.sport||"";const teams=document.createElement("div");teams.className="teams";teams.textContent=(match.team1?.name||"")+" - "+(match.team2?.name||"");left.appendChild(league);left.appendChild(teams);const time=document.createElement("div");time.className="time";time.textContent=match.match_time||match.kickoff_time||"";head.appendChild(left);head.appendChild(time);const servers=document.createElement("div");servers.className="servers";match.servers.forEach((server,index)=>{const group=document.createElement("div");group.className="server-group";const label=document.createElement("span");label.className="label";label.textContent=server.label||"";group.appendChild(label);group.appendChild(createButton(server,index));servers.appendChild(group)});card.appendChild(head);card.appendChild(servers);container.appendChild(card)}}
+async function load(){try{const response=await fetch(JSON_URL,{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);const data=await response.json();if(!Array.isArray(data))throw new Error("sch.json non contiene un array");renderMatches(data)}catch(err){document.getElementById("status").textContent="Errore nel caricamento di sch.json: "+err.message}}
+load();setInterval(load,60000);
 </script>
 </body>
 </html>
